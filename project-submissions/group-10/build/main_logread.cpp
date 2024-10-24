@@ -190,25 +190,28 @@ void deriveKey() {
     }
     // Update the state based on an event
     void updateState(const Event& event) {
-        std::string key = (event.isEmployee ? "E:" : "G:") + event.name;
-        if (event.isArrival) {
-            if (event.roomId == -1) {
-                inCampus[key] = true;
-                lastEntry[key] = event.timestamp;
+            std::string key = (event.isEmployee ? "E:" : "G:") + event.name;
+            if (event.isArrival) {
+                if (event.roomId == -1) {
+                    inCampus[key] = true;
+                    lastEntry[key] = event.timestamp;
+                } else {
+                    currentRoom[key] = event.roomId;
+                    // Only add to room history when entering a room
+                    if (roomHistory[key].empty() || roomHistory[key].back() != event.roomId) {
+                        roomHistory[key].push_back(event.roomId);
+                    }
+                }
             } else {
-                currentRoom[key] = event.roomId;
-                roomHistory[key].push_back(event.roomId);
-            }
-        } else {
-            if (event.roomId == -1) {
-                inCampus[key] = false;
-                totalTime[key] += event.timestamp - lastEntry[key];
-                currentRoom.erase(key);
-            } else {
-                currentRoom.erase(key);
+                if (event.roomId == -1) {
+                    inCampus[key] = false;
+                    totalTime[key] += event.timestamp - lastEntry[key];
+                    currentRoom.erase(key);
+                } else {
+                    currentRoom.erase(key);
+                }
             }
         }
-    }
     // Check if a name exists in the log
     bool nameExists(const std::string& name, bool isEmployee) const {
         std::string key = (isEmployee ? "E:" : "G:") + name;
@@ -249,17 +252,22 @@ void deriveKey() {
     }
     // Print the room history for a specific person
     void printRoomHistory(const std::string& name, bool isEmployee) {
-        if (!nameExists(name, isEmployee)) {
-            return; // Print nothing if the name doesn't exist
-        }
+            if (!nameExists(name, isEmployee)) {
+                return; // Print nothing if the name doesn't exist
+            }
 
-        std::string key = (isEmployee ? "E:" : "G:") + name;
-        if (roomHistory.count(key) > 0) {
-            std::vector<int> sortedRooms = roomHistory[key];
-            std::sort(sortedRooms.begin(), sortedRooms.end());
-            std::cout << join(sortedRooms, ",") << std::endl;
+            std::string key = (isEmployee ? "E:" : "G:") + name;
+            if (roomHistory.count(key) > 0) {
+                const auto& rooms = roomHistory[key];
+                if (!rooms.empty()) {
+                    std::cout << rooms[0];
+                    for (size_t i = 1; i < rooms.size(); ++i) {
+                        std::cout << "," << rooms[i];
+                    }
+                    std::cout << std::endl;
+                }
+            }
         }
-    }
     // Print the total time spent on campus for a specific person
     void printTotalTime(const std::string& name, bool isEmployee) {
         if (!nameExists(name, isEmployee)) {

@@ -150,25 +150,18 @@ private:
 
             // Read the salt first
             file.read(reinterpret_cast<char*>(salt), sizeof(salt));
-
-            // Now derive the key using this salt
             deriveKey();
-
 
             char magic[8];
             uint32_t version;
             file.read(magic, 8);
             file.read(reinterpret_cast<char*>(&version), sizeof(version));
-            
             file.read(reinterpret_cast<char*>(iv), sizeof(iv));
 
             // Read the rest of the file
             std::vector<unsigned char> encrypted_content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
 
-            if (encrypted_content.size() < 16) {
-                // The file is too small to contain valid data
-                return false;
-            }
+            if (encrypted_content.size() < 16) return false;
 
             // The last 16 bytes are the tag
             unsigned char tag[16];
@@ -192,31 +185,51 @@ private:
             int ret = EVP_DecryptFinal_ex(ctx, decrypted_content.data() + len, &len);
             EVP_CIPHER_CTX_free(ctx);
 
-            if (ret > 0) {
-                plaintext_len += len;
-                decrypted_content.resize(plaintext_len);
-
-                // Parse the decrypted content
-                std::string decrypted_str(decrypted_content.begin(), decrypted_content.end());
-                std::istringstream iss(decrypted_str);
-                std::string line;
-                events.clear();
-                inCampus.clear();
-                currentRoom.clear();
-                while (std::getline(iss, line)) {
-                    Event event(0, "", "", false, false);
-                    std::istringstream line_iss(line);
-                    line_iss >> event.timestamp >> event.token >> event.name >> event.isEmployee >> event.isArrival >> event.roomId;
-                    if (events.empty()) {
-                        validToken = event.token;
-                    }
-                    events.push_back(event);
-                    updateState(event);
-                }
-                return true;
+            if (ret <= 0) {
+                // Decryption failed - likely wrong token
+                std::cout << "invalid" << std::endl;
+                exit(255);
             }
-            return false;
+
+            plaintext_len += len;
+            decrypted_content.resize(plaintext_len);
+
+            // Parse the decrypted content
+            std::string decrypted_str(decrypted_content.begin(), decrypted_content.end());
+            std::istringstream iss(decrypted_str);
+            std::string line;
+            events.clear();
+            inCampus.clear();
+            currentRoom.clear();
+
+            // Read first event to establish valid token
+            if (std::getline(iss, line)) {
+                Event event(0, "", "", false, false);
+                std::istringstream line_iss(line);
+                line_iss >> event.timestamp >> event.token >> event.name >> event.isEmployee >> event.isArrival >> event.roomId;
+                validToken = event.token;
+                
+                // Check if current token matches the file's token
+                if (token != validToken) {
+                    std::cout << "invalid" << std::endl;
+                    exit(255);
+                }
+                
+                events.push_back(event);
+                updateState(event);
+            }
+
+            // Read remaining events
+            while (std::getline(iss, line)) {
+                Event event(0, "", "", false, false);
+                std::istringstream line_iss(line);
+                line_iss >> event.timestamp >> event.token >> event.name >> event.isEmployee >> event.isArrival >> event.roomId;
+                events.push_back(event);
+                updateState(event);
+            }
+            return true;
         }
+
     bool readLog() {
         std::ifstream file(logFile);
         if (!file) return true; // It's okay if the file doesn't exist yet
@@ -319,6 +332,7 @@ private:
         // Validates an entry before appending it to the log
 
         bool validateEntry(const Event& event) {
+            // Basic validation checks
             if (event.timestamp < 1 || event.timestamp > MAX_TIMESTAMP) return false;
             if (!events.empty() && event.timestamp <= events.back().timestamp) return false;
             if (!isValidToken(event.token)) return false;
@@ -330,14 +344,18 @@ private:
 
             if (event.isArrival) {
                 if (event.roomId == -1) {
+                    // Entering campus
                     if (inCampus[key]) return false;
                 } else {
+                    // Entering room
                     if (!inCampus[key] || currentRoom.count(key) > 0) return false;
                 }
             } else {
                 if (event.roomId == -1) {
-                    if (!inCampus[key]) return false;
+                    // Leaving campus - Must not be in any room
+                    if (!inCampus[key] || currentRoom.count(key) > 0) return false;
                 } else {
+                    // Leaving room
                     if (currentRoom[key] != event.roomId) return false;
                 }
             }
@@ -356,8 +374,7 @@ private:
 
         std::string line;
         bool anySuccess = false;
-        std::string defaultToken = "defaultToken";  
-        SecureLogManager manager("", defaultToken);  // Initialize with empty log file and token
+        std::string defaultToken = "defaultToken";
 
         while (std::getline(file, line)) {
             std::istringstream iss(line);
@@ -369,21 +386,57 @@ private:
 
             long timestamp = 0;
             std::string token, name, logFile;
-            bool isEmployee = false, isArrival = false;
+            bool isEmployee = false, isGuest = false;
+            bool isArrival = false, isLeaving = false;
             int roomId = -1;
+            bool hasName = false;
 
             for (size_t i = 0; i < args.size(); ++i) {
                 if (args[i] == "-T") timestamp = std::stol(args[++i]);
                 else if (args[i] == "-K") token = args[++i];
-                else if (args[i] == "-E") { name = args[++i]; isEmployee = true; }
-                else if (args[i] == "-G") { name = args[++i]; isEmployee = false; }
-                else if (args[i] == "-A") isArrival = true;
-                else if (args[i] == "-L") isArrival = false;
+                else if (args[i] == "-E") {
+                    if (isGuest) {
+                        std::cout << "invalid" << std::endl;
+                        continue;
+                    }
+                    name = args[++i];
+                    isEmployee = true;
+                    hasName = true;
+                }
+                else if (args[i] == "-G") {
+                    if (isEmployee) {
+                        std::cout << "invalid" << std::endl;
+                        continue;
+                    }
+                    name = args[++i];
+                    isGuest = true;
+                    hasName = true;
+                }
+                else if (args[i] == "-A") {
+                    if (isLeaving) {
+                        std::cout << "invalid" << std::endl;
+                        continue;
+                    }
+                    isArrival = true;
+                }
+                else if (args[i] == "-L") {
+                    if (isArrival) {
+                        std::cout << "invalid" << std::endl;
+                        continue;
+                    }
+                    isLeaving = true;
+                }
                 else if (args[i] == "-R") roomId = std::stoi(args[++i]);
                 else logFile = args[i];
             }
 
-            manager = SecureLogManager(logFile, token);  // Reset the manager with the current log file and token
+            // Additional validation
+            if (logFile.empty() || token.empty() || !hasName || timestamp == 0 || (!isArrival && !isLeaving)) {
+                std::cout << "invalid" << std::endl;
+                continue;
+            }
+
+            SecureLogManager manager(logFile, token);
             Event event(timestamp, token, name, isEmployee, isArrival, roomId);
             if (!manager.appendEntry(event)) {
                 std::cout << "invalid" << std::endl;
@@ -412,31 +465,62 @@ int main(int argc, char* argv[]) {
 
     long timestamp = 0;
     std::string token, name, logFile;
-    bool isEmployee = false, isArrival = false;
+    bool isEmployee = false, isGuest = false;
+    bool isArrival = false, isLeaving = false;
     int roomId = -1;
+    bool hasName = false;
 
     for (int i = 1; i < argc; ++i) {
         if (strcmp(argv[i], "-T") == 0) timestamp = std::stol(argv[++i]);
         else if (strcmp(argv[i], "-K") == 0) token = argv[++i];
-        else if (strcmp(argv[i], "-E") == 0) { name = argv[++i]; isEmployee = true; }
-        else if (strcmp(argv[i], "-G") == 0) { name = argv[++i]; isEmployee = false; }
-        else if (strcmp(argv[i], "-A") == 0) isArrival = true;
-        else if (strcmp(argv[i], "-L") == 0) isArrival = false;
+        else if (strcmp(argv[i], "-E") == 0) { 
+            if (isGuest) {
+                std::cout << "invalid" << std::endl;
+                return 255;
+            }
+            name = argv[++i]; 
+            isEmployee = true;
+            hasName = true;
+        }
+        else if (strcmp(argv[i], "-G") == 0) { 
+            if (isEmployee) {
+                std::cout << "invalid" << std::endl;
+                return 255;
+            }
+            name = argv[++i]; 
+            isGuest = true;
+            hasName = true;
+        }
+        else if (strcmp(argv[i], "-A") == 0) {
+            if (isLeaving) {
+                std::cout << "invalid" << std::endl;
+                return 255;
+            }
+            isArrival = true;
+        }
+        else if (strcmp(argv[i], "-L") == 0) {
+            if (isArrival) {
+                std::cout << "invalid" << std::endl;
+                return 255;
+            }
+            isLeaving = true;
+        }
         else if (strcmp(argv[i], "-R") == 0) roomId = std::stoi(argv[++i]);
         else logFile = argv[i];
     }
 
-    if (logFile.empty() || token.empty() || name.empty() || timestamp == 0) {
+    // Additional validation
+    if (logFile.empty() || token.empty() || !hasName || timestamp == 0 || (!isArrival && !isLeaving)) {
         std::cout << "invalid" << std::endl;
         return 255;
     }
 
     SecureLogManager manager(logFile, token);
-       Event event(timestamp, token, name, isEmployee, isArrival, roomId);
-       if (!manager.appendEntry(event)) {
-           std::cout << "invalid" << std::endl;
-           return 255;
-       }
+    Event event(timestamp, token, name, isEmployee, isArrival, roomId);
+    if (!manager.appendEntry(event)) {
+        std::cout << "invalid" << std::endl;
+        return 255;
+    }
 
     return 0;
 }
