@@ -172,7 +172,7 @@ bool checks_on_sequence(Activity lastActivity, ParsedData data)
         return true;
     }
     // previous is room entry, current is room exit
-    else if (lastActivity.A_flag && lastActivity.R != -1 && data.L_flag && data.R != -1)
+    else if (lastActivity.A_flag && lastActivity.R != -1 && data.L_flag && data.R != -1 && lastActivity.R == data.R)
     {
         return true;
     }
