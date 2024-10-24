@@ -25,7 +25,16 @@ bool isValidAccountName(const std::string& accountName) {
     if (accountName.length() < 1 || accountName.length() > 122) {
         return false;
     }
-    return isValidFilename(accountName); // Same character rules as filenames
+    // Allow '.' and '..' as valid account names
+    if (accountName == "." || accountName == "..") {
+        return true;
+    }
+    // Regular expression to validate the characters in account names
+    std::regex valid_chars(R"(^[_\-0-9a-z]([_\-\.0-9a-z]{0,120}[_\-0-9a-z])?$)");
+    if (!std::regex_match(accountName, valid_chars)) {
+        return false;
+    }
+    return true;
 }
 
 // Function to validate positive numbers without leading zero
@@ -66,7 +75,7 @@ std::string trimLeadingSpaces(const std::string& str) {
 }
 
 bool isPositiveDecimal(const std::string &number) {
-    std::regex decimalPattern(R"(^0$|^[1-9]\d*(\.\d+)?$)");
+    std::regex decimalPattern(R"(^0$|^[1-9]\d*(\.\d{1,2})?$)");
     return std::regex_match(number, decimalPattern);
 }
 
