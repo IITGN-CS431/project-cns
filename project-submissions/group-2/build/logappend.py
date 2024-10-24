@@ -98,6 +98,11 @@ def check_entry_exit_restrictions(current_room, args):
 
     return True, None
 
+def normalize_room_id(room_id):
+    # Convert the room ID to an integer to drop leading zeros
+    normalized_id = str(int(room_id))
+    return normalized_id
+
 # Function to process a batch file
 def process_batch_file(batch_file):
     if not os.path.exists(batch_file):
@@ -130,12 +135,13 @@ def process_args(args=None):
 
     args = parser.parse_args(args)
 
-    if args.T == 0:
+    if not ( 0 < args.T <= 1073741823 ):
         raise ValueError("Timestamp cannot be zero.")
 
     # Ensure that the room ID is an integer between 0 and 1,073,741,823
     if args.R is not None:
         try:
+            args.R = normalize_room_id(args.R)
             room_id = int(args.R)
             if room_id < 0 or room_id > 1073741823:
                 raise ValueError("Invalid Room Number")
@@ -151,7 +157,15 @@ def process_args(args=None):
 
     if args.A and args.L:
         raise ValueError("Specify either -A for arrival or -L for departure, not both.")
-
+    
+    #Ensure that args.E or args.G is alphabetical (a-z, A-Z)
+    if args.E:
+        if not args.E.isalpha():
+            raise ValueError("Invalid Employee Name.")
+    if args.G:
+        if not args.G.isalpha():
+            raise ValueError("Invalid Guest Name.")
+    
     if not authenticate(args.log, args.K):
         raise ValueError("Authentication failed.")
 
