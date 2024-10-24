@@ -265,11 +265,17 @@ void sendRequest(Json::Value& request, const char* ip, int port) {
         std::istringstream ss(buffer);
         std::string errs;
 
+        // Functioinality bug solved
         // Parse the response JSON
         if (Json::parseFromStream(reader, ss, &response, &errs)) {
-            // Print the relevant response fields except HMAC
-            std::cout << "Response: " << response["message"].asString() << std::endl;
-            std::cout << "Status: " << response["status"].asString() << std::endl;
+            // Iterate over all the fields in the response object
+            for (const auto& key : response.getMemberNames()) {
+                // Skip the "hmac" field
+                if (key != "hmac") {
+                    // Print the key and its corresponding value
+                    std::cout << key << ": " << response[key].asString() << std::endl;
+                }
+            }
         } else {
             std::cerr << "Failed to parse server response: " << errs << std::endl;
         }
