@@ -2,6 +2,7 @@ import sys
 import os
 import stat
 from cryptography.fernet import Fernet
+import bcrypt
 
 def main():
     # Check if the correct number of arguments is provided
@@ -20,7 +21,7 @@ def main():
         print(f"Setup for {log_file} has already been done. Cannot set up again.")
         return  # Exit if the log file has already been set up
 
-    # Generate or read the secret key
+    # Generate or read the secret key for Fernet encryption
     key_file = 'secret.key'
     try:
         with open(key_file, 'rb') as kf:
@@ -33,18 +34,18 @@ def main():
             kf.write(key)
             print(f"New key generated and saved to {key_file}.")  # Debugging statement
 
-    # Create a Fernet object with the key
-    key = 'cjwLeVHhTx7PWUEGJVpYiPVRDUrPORnupX7TZED7w/Q=' # Dummy Key.
+    # Create a Fernet object with the key (for future encryption use)
     f = Fernet(key)
 
-    # Encrypt the password
-    encrypted_password = f.encrypt(password.encode())
+    # Hash the password using bcrypt
+    salt = bcrypt.gensalt()  # Generate a salt for hashing
+    hashed_password = bcrypt.hashpw(password.encode(), salt)  # Hash the password with bcrypt
     
-    # Save the encrypted password to the specified log file
+    # Save the hashed password to the specified log file
     with open(log_file, 'ab') as lf:  # Append to the file
-        lf.write(encrypted_password + b'\n')  # Add a newline for clarity
+        lf.write(hashed_password + b'\n')  # Add a newline for clarity
     
     print(f"Setup Done. Remember Your Password.")
-
+    
 if __name__ == "__main__":
     main()
