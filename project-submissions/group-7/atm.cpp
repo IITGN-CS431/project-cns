@@ -31,8 +31,7 @@ using namespace Json;
 //                                                                  GLOBAL VARIABLES
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-string BANK_AUTH_FILE_PATH = "./bank.auth";
-string ATM_AUTH_CONTENT = "";
+string AUTH_FILE_PATH = "";
 string IP_ADDRESS = "127.0.0.1";
 int PORT = 3000;
 #define BUFFER_SIZE 4096
@@ -189,7 +188,7 @@ bool isValidAccountName(const string &account)
 
 void check_req_args(string &error)
 {
-    if (ATM_AUTH_CONTENT == "")
+    if (AUTH_FILE_PATH == "")
     {
         error += "ATM authentication failed! Missing argument -s [...]\n";
     }
@@ -224,7 +223,7 @@ void parseArguments(int argc, char *argv[], string &error)
             exit(0);
 
         case 's':
-            ATM_AUTH_CONTENT = optarg;
+            AUTH_FILE_PATH = optarg;
             break;
 
         case 'i':
@@ -763,18 +762,18 @@ void createNewAccount(const string &account, string &balance, const string &card
     }
 
     string password = generateRandomPassword();
-    ifstream bankAuthFile(BANK_AUTH_FILE_PATH);
-    if (!bankAuthFile)
+    ifstream AuthFile(AUTH_FILE_PATH);
+    if (!AuthFile)
     {
         cerr << "Bank authentication file not found" << endl;
         exit(255);
     }
-    string bankAuthContent;
-    bankAuthFile >> bankAuthContent;
-    bankAuthFile.close();
+    string AUTH_CONTENT;
+    AuthFile >> AUTH_CONTENT;
+    AuthFile.close();
 
     Value jsonMessage;
-    jsonMessage["auth"] = bankAuthContent;
+    jsonMessage["auth"] = AUTH_CONTENT;
     jsonMessage["mode"] = "n";
     jsonMessage["account"] = account;
     jsonMessage["password"] = password;
@@ -809,18 +808,18 @@ void depositMoney(const string &account, string &amount, const string &cardFile,
     string password;
     infile >> password;
     infile.close();
-    ifstream bankAuthFile(BANK_AUTH_FILE_PATH);
-    if (!bankAuthFile)
+    ifstream AuthFile(AUTH_FILE_PATH);
+    if (!AuthFile)
     {
         cerr << "Bank authentication file not found" << endl;
         exit(255);
     }
-    string bankAuthContent;
-    bankAuthFile >> bankAuthContent;
-    bankAuthFile.close();
+    string AUTH_CONTENT;
+    AuthFile >> AUTH_CONTENT;
+    AuthFile.close();
 
     Value jsonMessage;
-    jsonMessage["auth"] = bankAuthContent;
+    jsonMessage["auth"] = AUTH_CONTENT;
     jsonMessage["mode"] = "d";
     jsonMessage["account"] = account;
     jsonMessage["password"] = password;
@@ -842,18 +841,18 @@ void withdrawMoney(const string &account, string &amount, const string &cardFile
     string password;
     infile >> password;
     infile.close();
-    ifstream bankAuthFile(BANK_AUTH_FILE_PATH);
-    if (!bankAuthFile)
+    ifstream AuthFile(AUTH_FILE_PATH);
+    if (!AuthFile)
     {
         cerr << "Bank authentication file not found" << endl;
         exit(255);
     }
-    string bankAuthContent;
-    bankAuthFile >> bankAuthContent;
-    bankAuthFile.close();
+    string AUTH_CONTENT;
+    AuthFile >> AUTH_CONTENT;
+    AuthFile.close();
 
     Value jsonMessage;
-    jsonMessage["auth"] = bankAuthContent;
+    jsonMessage["auth"] = AUTH_CONTENT;
     jsonMessage["mode"] = "w";
     jsonMessage["account"] = account;
     jsonMessage["password"] = password;
@@ -876,18 +875,18 @@ void getBalance(const string &account, const string &cardFile, const string &ip,
     infile >> password;
     infile.close();
     // Now read bank.auth file and get the ATM's public key
-    ifstream bankAuthFile(BANK_AUTH_FILE_PATH);
-    if (!bankAuthFile)
+    ifstream AuthFile(AUTH_FILE_PATH);
+    if (!AuthFile)
     {
         cerr << "Bank authentication file not found" << endl;
         exit(255);
     }
-    string bankAuthContent;
-    bankAuthFile >> bankAuthContent;
-    bankAuthFile.close();
+    string AUTH_CONTENT;
+    AuthFile >> AUTH_CONTENT;
+    AuthFile.close();
 
     Value jsonMessage;
-    jsonMessage["auth"] = bankAuthContent;
+    jsonMessage["auth"] = AUTH_CONTENT;
     jsonMessage["mode"] = "g";
     jsonMessage["account"] = account;
     jsonMessage["password"] = password;
